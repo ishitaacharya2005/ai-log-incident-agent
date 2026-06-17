@@ -1,0 +1,14 @@
+Jun 14 02:10:01 server sshd[1001]: Accepted password for deploy from 10.0.0.15 port 51200 ssh2
+Jun 14 02:10:45 server sshd[1002]: Failed password for root from 198.51.100.7 port 51514 ssh2
+Jun 14 02:10:50 server sshd[1003]: Failed password for root from 198.51.100.7 port 51515 ssh2
+Jun 14 02:10:55 server sshd[1004]: Failed password for root from 198.51.100.7 port 51516 ssh2
+Jun 14 02:11:00 server sshd[1005]: Failed password for admin from 198.51.100.7 port 51517 ssh2
+Jun 14 02:11:05 server sshd[1006]: Invalid user oracle from 198.51.100.7 port 51518 ssh2
+Jun 14 02:11:10 server sshd[1007]: Failed password for root from 198.51.100.7 port 51519 ssh2
+Jun 14 02:11:15 server sshd[1008]: Failed password for postgres from 198.51.100.7 port 51520 ssh2
+Jun 14 02:11:20 server sshd[1009]: Failed password for root from 198.51.100.7 port 51521 ssh2
+Jun 14 02:12:30 server sshd[1010]: Accepted password for deploy from 10.0.0.15 port 51601 ssh2
+Jun 14 03:40:02 server sshd[1011]: Failed password for admin from 203.0.113.44 port 60010 ssh2
+Jun 14 03:40:08 server sshd[1012]: Failed password for admin from 203.0.113.44 port 60011 ssh2
+Jun 14 03:45:00 server sshd[1013]: Connection closed by 203.0.113.44 port 60012 ssh2
+Jun 14 06:00:00 server sshd[1014]: Accepted password for ishita from 10.0.0.22 port 52000 ssh2

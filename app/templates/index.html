@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SENTINEL — AI Log &amp; Incident Analyst</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0D1117;
+    --bg-panel: #131A22;
+    --bg-panel-raised: #1A222C;
+    --line: #232C38;
+    --text: #E6EDF3;
+    --text-dim: #7C8B9C;
+    --accent-amber: #F5A623;
+    --accent-red: #D14343;
+    --accent-green: #3FB68B;
+    --accent-blue: #5B9DD9;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+  }
+
+  .scanline {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-amber), transparent);
+    opacity: 0.5;
+    animation: scan 6s linear infinite;
+    z-index: 100;
+  }
+  @keyframes scan {
+    0% { top: 0%; }
+    100% { top: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scanline { animation: none; display: none; }
+  }
+
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .brand-mark {
+    width: 10px; height: 10px;
+    background: var(--accent-green);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--accent-green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .brand h1 {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+  }
+  .brand span.sub {
+    display: block;
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    letter-spacing: 0.02em;
+    font-weight: 400;
+  }
+
+  .status-chip {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    padding: 6px 12px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+  }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+  }
+
+  .intake {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 28px;
+    margin-bottom: 32px;
+  }
+
+  .intake h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .intake p {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+    max-width: 600px;
+    line-height: 1.5;
+  }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .file-input-wrap {
+    position: relative;
+    overflow: hidden;
+  }
+  .file-input-wrap input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  button, .btn {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--line);
+    background: var(--bg-panel-raised);
+    color: var(--text);
+    padding: 10px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.1s ease;
+  }
+  button:hover, .btn:hover {
+    border-color: var(--accent-amber);
+  }
+  button:active { transform: scale(0.98); }
+  button:focus-visible, .btn:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background: var(--accent-amber);
+    color: #1A1305;
+    border-color: var(--accent-amber);
+    font-weight: 700;
+  }
+  .btn-primary:hover { opacity: 0.9; }
+
+  #fileName {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+
+  .summary-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+  .summary-cell {
+    background: var(--bg-panel);
+    padding: 20px;
+  }
+  .summary-cell .num {
+    font-family: var(--mono);
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .summary-cell .label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 6px;
+  }
+  .sev-critical .num { color: var(--accent-red); }
+  .sev-high .num { color: #E8833A; }
+  .sev-medium .num { color: var(--accent-amber); }
+  .sev-low .num { color: var(--accent-green); }
+
+  .exec-summary {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent-blue);
+    border-radius: 6px;
+    padding: 24px;
+    margin-bottom: 32px;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .exec-summary .tag {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--accent-blue);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 10px;
+  }
+
+  .incidents-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+  }
+  .incidents-header h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+  .incidents-header span {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--text-dim);
+  }
+
+  .incident-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent-amber);
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin-bottom: 14px;
+  }
+  .incident-card.critical { border-left-color: var(--accent-red); }
+  .incident-card.high { border-left-color: #E8833A; }
+  .incident-card.medium { border-left-color: var(--accent-amber); }
+  .incident-card.low { border-left-color: var(--accent-green); }
+
+  .incident-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .incident-type {
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .incident-meta {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+  }
+  .incident-meta b { color: var(--text); }
+
+  .sev-badge {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 3px;
+  }
+  .sev-badge.critical { background: rgba(209,67,67,0.15); color: var(--accent-red); }
+  .sev-badge.high { background: rgba(232,131,58,0.15); color: #E8833A; }
+  .sev-badge.medium { background: rgba(245,166,35,0.15); color: var(--accent-amber); }
+  .sev-badge.low { background: rgba(63,182,139,0.15); color: var(--accent-green); }
+
+  .incident-summary {
+    font-size: 0.88rem;
+    line-height: 1.55;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+
+  .incident-action {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+  .incident-action b { color: var(--accent-blue); font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em; }
+
+  .evidence-toggle {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    margin-top: 10px;
+    display: inline-block;
+  }
+  .evidence-toggle:hover { color: var(--accent-amber); }
+
+  .evidence-block {
+    display: none;
+    background: #0A0F14;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+  .evidence-block.open { display: block; }
+
+  .empty-state, .loading-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+  }
+
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    font-family: var(--mono);
+    border-top: 1px solid var(--line);
+  }
+
+  @media (max-width: 640px) {
+    .summary-bar { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 16px 20px; }
+    main { padding: 24px 20px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div>
+      <h1>SENTINEL<span class="sub">AI Log &amp; Incident Analyst Agent</span></h1>
+    </div>
+  </div>
+  <div class="status-chip" id="statusChip">PIPELINE IDLE</div>
+</header>
+
+<main>
+  <section class="intake">
+    <h2>Submit logs for analysis</h2>
+    <p>Upload raw SSH, web server, or firewall log files. The pipeline parses each line, runs rule-based and Isolation Forest anomaly detection, then triages findings through a LangChain + Hugging Face agent.</p>
+    <div class="controls">
+      <div class="file-input-wrap btn">
+        <span id="fileName">Choose log file(s)</span>
+        <input type="file" id="fileInput" multiple accept=".log,.txt" />
+      </div>
+      <button class="btn-primary" id="analyzeBtn">Run Analysis</button>
+      <button id="sampleBtn">Load Sample Logs</button>
+    </div>
+  </section>
+
+  <div id="results"></div>
+</main>
+
+<footer>SENTINEL // built with FastAPI, LangChain, Hugging Face, scikit-learn</footer>
+
+<script>
+  const fileInput = document.getElementById('fileInput');
+  const fileName = document.getElementById('fileName');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const sampleBtn = document.getElementById('sampleBtn');
+  const resultsEl = document.getElementById('results');
+  const statusChip = document.getElementById('statusChip');
+
+  fileInput.addEventListener('change', () => {
+    const files = fileInput.files;
+    fileName.textContent = files.length ? `${files.length} file(s) selected` : 'Choose log file(s)';
+  });
+
+  function setStatus(text, color) {
+    statusChip.textContent = text;
+    statusChip.style.color = color || '';
+    statusChip.style.borderColor = color || '';
+  }
+
+  function severityCount(breakdown, key) {
+    return breakdown && breakdown[key] !== undefined ? breakdown[key] : 0;
+  }
+
+  function renderReport(data) {
+    const b = data.severity_breakdown || {};
+    const incidents = data.incidents || [];
+
+    let html = `
+      <div class="summary-bar">
+        <div class="summary-cell sev-critical"><div class="num">${severityCount(b,'critical')}</div><div class="label">Critical</div></div>
+        <div class="summary-cell sev-high"><div class="num">${severityCount(b,'high')}</div><div class="label">High</div></div>
+        <div class="summary-cell sev-medium"><div class="num">${severityCount(b,'medium')}</div><div class="label">Medium</div></div>
+        <div class="summary-cell sev-low"><div class="num">${severityCount(b,'low')}</div><div class="label">Low</div></div>
+      </div>
+
+      <div class="exec-summary">
+        <span class="tag">Executive Summary</span>
+        ${data.executive_summary}
+      </div>
+
+      <div class="incidents-header">
+        <h3>Detected Incidents</h3>
+        <span>${incidents.length} total &middot; ${data.total_log_lines} log lines parsed &middot; ${(data.parsing_coverage*100).toFixed(1)}% coverage</span>
+      </div>
+    `;
+
+    if (incidents.length === 0) {
+      html += `<div class="empty-state">No anomalies detected in the submitted logs.</div>`;
+    } else {
+      incidents.forEach((inc, idx) => {
+        const sev = inc.severity || 'low';
+        html += `
+          <div class="incident-card ${sev}">
+            <div class="incident-top">
+              <div class="incident-type">${inc.incident_type.replace(/_/g, ' ')}</div>
+              <div class="sev-badge ${sev}">${sev}</div>
+            </div>
+            <div class="incident-meta">
+              <span>SRC_IP: <b>${inc.src_ip}</b></span>
+              <span>TACTIC: <b>${inc.mitre_tactic}</b></span>
+              <span>DETECTOR: <b>${inc.detector}</b></span>
+              <span>CONFIDENCE: <b>${inc.detector_confidence}</b></span>
+            </div>
+            <div class="incident-summary">${inc.analyst_summary}</div>
+            <div class="incident-action"><b>RECOMMENDED ACTION →</b> ${inc.recommended_action}</div>
+            <span class="evidence-toggle" onclick="toggleEvidence(${idx})">▸ view raw evidence (${inc.evidence_count} events)</span>
+            <div class="evidence-block" id="evidence-${idx}">${inc.sample_evidence.join('\n')}</div>
+          </div>
+        `;
+      });
+    }
+
+    resultsEl.innerHTML = html;
+  }
+
+  window.toggleEvidence = function(idx) {
+    const el = document.getElementById(`evidence-${idx}`);
+    el.classList.toggle('open');
+  };
+
+  async function runAnalysis(endpoint, options) {
+    setStatus('ANALYZING…', '#F5A623');
+    resultsEl.innerHTML = `<div class="loading-state">Parsing logs, running anomaly detection, triaging incidents…</div>`;
+    try {
+      const res = await fetch(endpoint, options);
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      const data = await res.json();
+      renderReport(data);
+      setStatus('ANALYSIS COMPLETE', '#3FB68B');
+    } catch (err) {
+      resultsEl.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      setStatus('ERROR', '#D14343');
+    }
+  }
+
+  analyzeBtn.addEventListener('click', () => {
+    if (!fileInput.files.length) {
+      fileName.textContent = 'Select a file first';
+      return;
+    }
+    const formData = new FormData();
+    for (const f of fileInput.files) formData.append('files', f);
+    runAnalysis('/api/analyze', { method: 'POST', body: formData });
+  });
+
+  sampleBtn.addEventListener('click', () => {
+    runAnalysis('/api/sample-report', { method: 'GET' });
+  });
+</script>
+
+</body>
+</html>
