@@ -9,6 +9,9 @@ team. This is a separate agent from triage_agent deliberately -- triage is
 keeping them separate means each prompt stays focused and each step can be
 tested/swapped independently (e.g. swapping in a different summarization
 model without touching classification logic).
+
+Uses the same LangChain ChatOpenAI + Hugging Face router setup as
+triage_agent.py -- see that module's docstring for why.
 """
 
 import os
@@ -17,7 +20,7 @@ from datetime import datetime
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from app.agents.triage_agent import TriageResult, _get_chat_model
+from app.agents.triage_agent import TriageResult, _get_chat_model, DEFAULT_MODEL
 
 _REPORT_SYSTEM_PROMPT = """You are a security report writer. Given a list \
 of triaged security incidents, write a concise executive summary (3-5 \
@@ -61,10 +64,10 @@ def _mock_executive_summary(results: list[TriageResult], breakdown: dict) -> str
 
 
 def generate_report(results: list[TriageResult], use_llm: bool = False,
-                     model_id: str = "HuggingFaceH4/zephyr-7b-beta") -> IncidentReport:
+                     model_id: str = DEFAULT_MODEL) -> IncidentReport:
     breakdown = _severity_breakdown(results)
 
-    if not use_llm or not os.environ.get("HUGGINGFACEHUB_API_TOKEN"):
+    if not use_llm or not (os.environ.get("HUGGINGFACEHUB_API_TOKEN") or os.environ.get("HF_TOKEN")):
         summary = _mock_executive_summary(results, breakdown)
     else:
         # Entire LLM call wrapped in try/except so any failure (network,
@@ -85,9 +88,6 @@ def generate_report(results: list[TriageResult], use_llm: bool = False,
             response = chain.invoke({"incidents": incidents_text, "breakdown": breakdown})
             summary = response.content.strip()
         except Exception as exc:
-            # TEMP DIAGNOSTIC -- shows the real exception type/message in
-            # the uvicorn terminal. Remove this print once the LLM path
-            # is confirmed working end-to-end.
             print(f"[LLM FALLBACK - report] {type(exc).__name__}: {exc}")
             summary = _mock_executive_summary(results, breakdown)
 

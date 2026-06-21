@@ -13,9 +13,20 @@ produced by the rule-based and ML detectors and:
      account" should not be treated the same way).
   3. Writes a short analyst-style justification per incident.
 
-This module is intentionally decoupled from the LLM provider: swapping the
-Hugging Face endpoint model id is a one-line change, and a mock mode lets
-the rest of the system (API, UI, tests) run with zero HF API calls/cost.
+NOTE on the LLM client: Hugging Face deprecated the old serverless
+endpoint at api-inference.huggingface.co in favor of a unified,
+OpenAI-compatible "Inference Providers" router at
+https://router.huggingface.co/v1, which proxies to 15+ backend providers
+(Together AI, Fireworks, Groq, etc.) for any given model.
+
+We still use LangChain for prompt templating and chain composition
+(ChatPromptTemplate, LCEL `prompt | chat`), but the chat model itself is
+langchain_openai's ChatOpenAI pointed at the HF router via base_url --
+this is the officially documented pattern for OpenAI-API-compatible
+third-party endpoints (see Hugging Face's own TGI Messages API docs,
+which show this exact ChatOpenAI + custom base_url integration). The
+langchain_huggingface package's HuggingFaceEndpoint/ChatHuggingFace
+classes still target the deprecated hostname as of this writing.
 """
 
 import json
@@ -23,7 +34,7 @@ import os
 from dataclasses import dataclass
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langchain_openai import ChatOpenAI
 
 from app.core.anomaly_detector import Incident
 
@@ -55,6 +66,14 @@ Sample evidence (raw log lines, up to 5):
 {evidence_sample}
 """
 
+# Routed through Hugging Face's unified Inference Providers gateway.
+# ":fastest" lets HF auto-pick whichever backend provider is currently
+# serving this model fastest. Swap this to any chat model on the Hub
+# that has an active inference provider.
+DEFAULT_MODEL = "deepseek-ai/DeepSeek-V3:fastest"
+
+HF_ROUTER_BASE_URL = "https://router.huggingface.co/v1"
+
 
 @dataclass
 class TriageResult:
@@ -66,16 +85,24 @@ class TriageResult:
     recommended_action: str
 
 
-def _get_chat_model(model_id: str = "HuggingFaceH4/zephyr-7b-beta") -> ChatHuggingFace:
-    """Builds a LangChain ChatHuggingFace wrapper around a Hugging Face
-    Inference Endpoint. Requires HUGGINGFACEHUB_API_TOKEN to be set."""
-    llm = HuggingFaceEndpoint(
-        repo_id=model_id,
-        max_new_tokens=512,
-        temperature=0.2,          # low temperature: we want consistent JSON, not creativity
-        repetition_penalty=1.05,
+def _get_chat_model(model_id: str = DEFAULT_MODEL) -> ChatOpenAI:
+    """Builds a LangChain ChatOpenAI instance pointed at Hugging Face's
+    OpenAI-compatible router endpoint. Requires HUGGINGFACEHUB_API_TOKEN
+    (or HF_TOKEN) to be set in the environment.
+
+    This replaces the older langchain_huggingface.ChatHuggingFace, which
+    still points at the deprecated api-inference.huggingface.co host.
+    ChatOpenAI's base_url override is the documented way to talk to any
+    OpenAI-API-compatible third-party endpoint from inside LangChain.
+    """
+    token = os.environ.get("HUGGINGFACEHUB_API_TOKEN") or os.environ.get("HF_TOKEN")
+    return ChatOpenAI(
+        model=model_id,
+        api_key=token,
+        base_url=HF_ROUTER_BASE_URL,
+        max_tokens=512,
+        temperature=0.2,   # low temperature: consistent JSON, not creativity
     )
-    return ChatHuggingFace(llm=llm)
 
 
 def _build_prompt() -> ChatPromptTemplate:
@@ -112,20 +139,33 @@ def _mock_triage(incident: Incident) -> TriageResult:
     )
 
 
+def _clean_json_block(text: str) -> str:
+    """Strip markdown code fences (```json ... ``` or ``` ... ```) some
+    models wrap their JSON output in. Deliberately explicit instead of
+    .lstrip("json"), which strips matching *characters* from the left
+    edge repeatedly rather than the literal substring "json" -- a subtle
+    bug that could silently corrupt valid JSON starting with those letters."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+    return text.strip()
+
+
 def triage_incident(incident: Incident, use_llm: bool = False,
-                     model_id: str = "HuggingFaceH4/zephyr-7b-beta") -> TriageResult:
+                     model_id: str = DEFAULT_MODEL) -> TriageResult:
     """Main entry point. Set use_llm=True (and export HUGGINGFACEHUB_API_TOKEN)
     to route through the real Hugging Face model; otherwise falls back to a
     deterministic mock so the project demos without API costs/keys."""
-    if not use_llm or not os.environ.get("HUGGINGFACEHUB_API_TOKEN"):
+    if not use_llm or not (os.environ.get("HUGGINGFACEHUB_API_TOKEN") or os.environ.get("HF_TOKEN")):
         return _mock_triage(incident)
 
-    # NOTE: the entire LLM call + parse is inside one try block so that
-    # ANY failure mode -- network/DNS issues, auth errors, the model not
-    # being served on free inference, malformed JSON in the response --
-    # is caught and degrades gracefully to the mock instead of crashing
-    # the whole pipeline. The diagnostic print below is temporary scaffolding
-    # to identify *which* failure mode is occurring; remove once confirmed.
+    # Entire LLM call + parse wrapped in one try/except so ANY failure mode
+    # (network/DNS issues, auth errors, the model being unavailable,
+    # malformed JSON in the response) degrades gracefully to the mock
+    # instead of crashing the whole pipeline -- this is the graceful
+    # degradation behavior the README describes.
     try:
         chat = _get_chat_model(model_id)
         prompt = _build_prompt()
@@ -141,7 +181,7 @@ def triage_incident(incident: Incident, use_llm: bool = False,
             "evidence_sample": evidence_sample,
         })
 
-        parsed = json.loads(response.content.strip().strip("`").lstrip("json"))
+        parsed = json.loads(_clean_json_block(response.content))
         return TriageResult(
             incident=incident,
             mitre_tactic=parsed.get("mitre_tactic", "Discovery"),
@@ -151,10 +191,6 @@ def triage_incident(incident: Incident, use_llm: bool = False,
             recommended_action=parsed.get("recommended_action", ""),
         )
     except Exception as exc:
-        # TEMP DIAGNOSTIC -- shows the real exception type/message in the
-        # uvicorn terminal so we can tell DNS failure apart from a 404
-        # (model not deployed on free inference) apart from bad JSON.
-        # Remove this print once the LLM path is confirmed working.
         print(f"[LLM FALLBACK - triage] {type(exc).__name__}: {exc}")
         return _mock_triage(incident)
 
