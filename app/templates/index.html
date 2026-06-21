@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Logbook - a quiet watch over your logs</title>
+<title>Logbook &mdash; a quiet watch over your logs</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
@@ -24,8 +24,8 @@
         <span id="fileName">Choose a file</span>
         <input type="file" id="fileInput" multiple accept=".log,.txt" />
       </div>
-      <button class="btn-primary" id="analyzeBtn">Analyze </button>
-      <button id="sampleBtn">Sample Logs</button>
+      <button class="btn-primary" id="analyzeBtn">Take a look</button>
+      <button id="sampleBtn">Try it with an example</button>
     </div>
   </section>
 
@@ -59,9 +59,9 @@
   };
 
   const FRIENDLY_SEVERITY = {
-    critical: 'Needs attention now',
-    high: 'Worth a close look',
-    medium: 'Worth noting',
+    critical: 'Urgent',
+    high: 'High',
+    medium: 'Medium',
     low: 'Minor',
   };
 
@@ -72,8 +72,8 @@
     let html = `
       <div class="summary-bar">
         <div class="summary-cell sev-critical"><div class="num">${severityCount(b,'critical')}</div><div class="label">Urgent</div></div>
-        <div class="summary-cell sev-high"><div class="num">${severityCount(b,'high')}</div><div class="label">Worth a look</div></div>
-        <div class="summary-cell sev-medium"><div class="num">${severityCount(b,'medium')}</div><div class="label">Worth noting</div></div>
+        <div class="summary-cell sev-high"><div class="num">${severityCount(b,'high')}</div><div class="label">High</div></div>
+        <div class="summary-cell sev-medium"><div class="num">${severityCount(b,'medium')}</div><div class="label">Medium</div></div>
         <div class="summary-cell sev-low"><div class="num">${severityCount(b,'low')}</div><div class="label">Minor</div></div>
       </div>
 
@@ -105,7 +105,7 @@
               <span>From <b>${inc.src_ip}</b></span>
             </div>
             <div class="incident-summary">${inc.analyst_summary}</div>
-            <div class="incident-action"><b>What to do →</b> ${inc.recommended_action}</div>
+            <div class="incident-action"><b>What to do &rarr;</b> ${inc.recommended_action}</div>
             <span class="evidence-toggle" onclick="toggleEvidence(${idx})">See the lines behind this (${inc.evidence_count})</span>
             <div class="evidence-block" id="evidence-${idx}">${inc.sample_evidence.join('\n')}</div>
           </div>
@@ -122,7 +122,7 @@
   };
 
   async function runAnalysis(endpoint, options) {
-    resultsEl.innerHTML = `<div class="loading-state">Reading through everything, one line at a time…</div>`;
+    resultsEl.innerHTML = `<div class="loading-state">Reading through everything, one line at a time&hellip;</div>`;
     try {
       const res = await fetch(endpoint, options);
       if (!res.ok) throw new Error(`Something went wrong (${res.status})`);
@@ -140,11 +140,11 @@
     }
     const formData = new FormData();
     for (const f of fileInput.files) formData.append('files', f);
-    runAnalysis('/api/analyze', { method: 'POST', body: formData });
+    runAnalysis('/api/analyze?use_llm=true', { method: 'POST', body: formData });
   });
 
   sampleBtn.addEventListener('click', () => {
-    runAnalysis('/api/sample-report', { method: 'GET' });
+    runAnalysis('/api/sample-report?use_llm=true', { method: 'GET' });
   });
 </script>
 
