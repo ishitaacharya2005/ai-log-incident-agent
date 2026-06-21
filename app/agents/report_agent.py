@@ -67,19 +67,29 @@ def generate_report(results: list[TriageResult], use_llm: bool = False,
     if not use_llm or not os.environ.get("HUGGINGFACEHUB_API_TOKEN"):
         summary = _mock_executive_summary(results, breakdown)
     else:
-        chat = _get_chat_model(model_id)
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", _REPORT_SYSTEM_PROMPT),
-            ("user", "Incidents:\n{incidents}\nSeverity breakdown: {breakdown}"),
-        ])
-        incidents_text = "\n".join(
-            f"- {r.incident.incident_type.value} from {r.incident.src_ip} "
-            f"(tactic: {r.mitre_tactic}, severity: {r.llm_severity})"
-            for r in results
-        )
-        chain = prompt | chat
-        response = chain.invoke({"incidents": incidents_text, "breakdown": breakdown})
-        summary = response.content.strip()
+        # Entire LLM call wrapped in try/except so any failure (network,
+        # auth, model-not-served, malformed response) degrades gracefully
+        # to the mock summary instead of crashing the whole report step.
+        try:
+            chat = _get_chat_model(model_id)
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", _REPORT_SYSTEM_PROMPT),
+                ("user", "Incidents:\n{incidents}\nSeverity breakdown: {breakdown}"),
+            ])
+            incidents_text = "\n".join(
+                f"- {r.incident.incident_type.value} from {r.incident.src_ip} "
+                f"(tactic: {r.mitre_tactic}, severity: {r.llm_severity})"
+                for r in results
+            )
+            chain = prompt | chat
+            response = chain.invoke({"incidents": incidents_text, "breakdown": breakdown})
+            summary = response.content.strip()
+        except Exception as exc:
+            # TEMP DIAGNOSTIC -- shows the real exception type/message in
+            # the uvicorn terminal. Remove this print once the LLM path
+            # is confirmed working end-to-end.
+            print(f"[LLM FALLBACK - report] {type(exc).__name__}: {exc}")
+            summary = _mock_executive_summary(results, breakdown)
 
     return IncidentReport(
         generated_at=datetime.utcnow().isoformat() + "Z",

@@ -114,9 +114,18 @@ def _mock_triage(incident: Incident) -> TriageResult:
 
 def triage_incident(incident: Incident, use_llm: bool = False,
                      model_id: str = "HuggingFaceH4/zephyr-7b-beta") -> TriageResult:
+    """Main entry point. Set use_llm=True (and export HUGGINGFACEHUB_API_TOKEN)
+    to route through the real Hugging Face model; otherwise falls back to a
+    deterministic mock so the project demos without API costs/keys."""
     if not use_llm or not os.environ.get("HUGGINGFACEHUB_API_TOKEN"):
         return _mock_triage(incident)
 
+    # NOTE: the entire LLM call + parse is inside one try block so that
+    # ANY failure mode -- network/DNS issues, auth errors, the model not
+    # being served on free inference, malformed JSON in the response --
+    # is caught and degrades gracefully to the mock instead of crashing
+    # the whole pipeline. The diagnostic print below is temporary scaffolding
+    # to identify *which* failure mode is occurring; remove once confirmed.
     try:
         chat = _get_chat_model(model_id)
         prompt = _build_prompt()
@@ -131,6 +140,7 @@ def triage_incident(incident: Incident, use_llm: bool = False,
             "notes": incident.notes,
             "evidence_sample": evidence_sample,
         })
+
         parsed = json.loads(response.content.strip().strip("`").lstrip("json"))
         return TriageResult(
             incident=incident,
@@ -140,10 +150,12 @@ def triage_incident(incident: Incident, use_llm: bool = False,
             analyst_summary=parsed.get("analyst_summary", ""),
             recommended_action=parsed.get("recommended_action", ""),
         )
-    except Exception:
-        # Catches malformed JSON AND network/auth/API failures -- the
-        # entire pipeline should survive even if the HF endpoint is
-        # completely unreachable, not just if it returns bad JSON.
+    except Exception as exc:
+        # TEMP DIAGNOSTIC -- shows the real exception type/message in the
+        # uvicorn terminal so we can tell DNS failure apart from a 404
+        # (model not deployed on free inference) apart from bad JSON.
+        # Remove this print once the LLM path is confirmed working.
+        print(f"[LLM FALLBACK - triage] {type(exc).__name__}: {exc}")
         return _mock_triage(incident)
 
 
