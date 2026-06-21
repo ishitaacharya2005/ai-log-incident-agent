@@ -25,7 +25,8 @@ from app.core.log_parser import parse_line, parsing_coverage
 from app.core.anomaly_detector import run_all_detectors
 from app.agents.triage_agent import triage_all
 from app.agents.report_agent import generate_report, report_to_dict
-
+from dotenv import load_dotenv
+load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 SAMPLE_LOG_DIR = BASE_DIR.parent / "data" / "sample_logs"
 

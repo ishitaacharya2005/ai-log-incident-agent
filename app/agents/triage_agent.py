@@ -114,27 +114,23 @@ def _mock_triage(incident: Incident) -> TriageResult:
 
 def triage_incident(incident: Incident, use_llm: bool = False,
                      model_id: str = "HuggingFaceH4/zephyr-7b-beta") -> TriageResult:
-    """Main entry point. Set use_llm=True (and export HUGGINGFACEHUB_API_TOKEN)
-    to route through the real Hugging Face model; otherwise falls back to a
-    deterministic mock so the project demos without API costs/keys."""
     if not use_llm or not os.environ.get("HUGGINGFACEHUB_API_TOKEN"):
         return _mock_triage(incident)
 
-    chat = _get_chat_model(model_id)
-    prompt = _build_prompt()
-    evidence_sample = "\n".join(e.raw_line for e in incident.evidence_events[:5])
-
-    chain = prompt | chat
-    response = chain.invoke({
-        "incident_type": incident.incident_type.value,
-        "src_ip": incident.src_ip,
-        "detector": incident.detector,
-        "confidence": incident.confidence,
-        "notes": incident.notes,
-        "evidence_sample": evidence_sample,
-    })
-
     try:
+        chat = _get_chat_model(model_id)
+        prompt = _build_prompt()
+        evidence_sample = "\n".join(e.raw_line for e in incident.evidence_events[:5])
+
+        chain = prompt | chat
+        response = chain.invoke({
+            "incident_type": incident.incident_type.value,
+            "src_ip": incident.src_ip,
+            "detector": incident.detector,
+            "confidence": incident.confidence,
+            "notes": incident.notes,
+            "evidence_sample": evidence_sample,
+        })
         parsed = json.loads(response.content.strip().strip("`").lstrip("json"))
         return TriageResult(
             incident=incident,
@@ -144,9 +140,10 @@ def triage_incident(incident: Incident, use_llm: bool = False,
             analyst_summary=parsed.get("analyst_summary", ""),
             recommended_action=parsed.get("recommended_action", ""),
         )
-    except (json.JSONDecodeError, AttributeError):
-        # If the model returns malformed JSON, degrade gracefully instead of
-        # crashing the whole pipeline -- fall back to the mock for this incident.
+    except Exception:
+        # Catches malformed JSON AND network/auth/API failures -- the
+        # entire pipeline should survive even if the HF endpoint is
+        # completely unreachable, not just if it returns bad JSON.
         return _mock_triage(incident)
 
 
