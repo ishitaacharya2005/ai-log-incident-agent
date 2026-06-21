@@ -134,8 +134,9 @@ def detect_directory_enumeration(events: list[LogEvent], threshold: int = 10,
     """Flag an IP generating a burst of 404s against a web server, a common
     signature of automated directory/endpoint brute forcing tools."""
     web_404s = [e for e in events
-                if e.source == LogSource.WEB_ACCESS
-                and e.status_code == 404 and e.src_ip and e.timestamp]
+            if e.source == LogSource.WEB_ACCESS
+            and e.status_code in (403, 404)
+            and e.src_ip and e.timestamp]
 
     by_ip: dict[str, list[LogEvent]] = defaultdict(list)
     for e in web_404s:
