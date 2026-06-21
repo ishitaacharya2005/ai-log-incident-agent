@@ -119,7 +119,7 @@ def report_to_dict(report: IncidentReport) -> dict:
                 "analyst_summary": r.analyst_summary,
                 "recommended_action": r.recommended_action,
                 "evidence_count": len(r.incident.evidence_events),
-                "sample_evidence": [e.raw_line for e in r.incident.evidence_events[:3]],
+                "sample_evidence": [e.raw_line for e in r.incident.evidence_events],
             }
             for r in report.triage_results
         ],

@@ -3,44 +3,36 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SENTINEL — AI Log &amp; Incident Analyst</title>
+<title>Logbook - a quiet watch over your logs</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<div class="steam"></div>
-<div class="steam steam-2"></div>
-
 <header>
-  <div class="brand">
-    <div class="brand-mark"></div>
-    <div>
-      <h1>SENTINEL<span class="sub">AI Log &amp; Incident Analyst Agent</span></h1>
-    </div>
-  </div>
-  <div class="status-chip" id="statusChip">PIPELINE IDLE</div>
+  <h1>Logbook</h1>
+  <p>A quiet, careful read of your logs for anything that doesn't look quite right.</p>
 </header>
 
 <main>
   <section class="intake">
-    <h2>Submit logs for analysis</h2>
-    <p>Upload raw SSH, web server, or firewall log files. The pipeline parses each line, runs rule-based and Isolation Forest anomaly detection, then triages findings through a LangChain + Hugging Face agent.</p>
+    <h2>Bring your logs</h2>
+    <p>Add your login, web, or connection logs below, and this will read through them, looking for anything unusual repeated failed logins, strange visits, that sort of thing and explain it back to you in plain words.</p>
     <div class="controls">
       <div class="file-input-wrap btn">
-        <span id="fileName">Choose log file(s)</span>
+        <span id="fileName">Choose a file</span>
         <input type="file" id="fileInput" multiple accept=".log,.txt" />
       </div>
-      <button class="btn-primary" id="analyzeBtn">Run Analysis</button>
-      <button id="sampleBtn">Load Sample Logs</button>
+      <button class="btn-primary" id="analyzeBtn">Analyze </button>
+      <button id="sampleBtn">Sample Logs</button>
     </div>
   </section>
 
   <div id="results"></div>
 </main>
 
-<footer>SENTINEL // built with FastAPI, LangChain, Hugging Face, scikit-learn</footer>
+<footer>Logbook - a small, careful tool for keeping an eye on things</footer>
 
 <script>
   const fileInput = document.getElementById('fileInput');
@@ -48,22 +40,30 @@
   const analyzeBtn = document.getElementById('analyzeBtn');
   const sampleBtn = document.getElementById('sampleBtn');
   const resultsEl = document.getElementById('results');
-  const statusChip = document.getElementById('statusChip');
 
   fileInput.addEventListener('change', () => {
     const files = fileInput.files;
-    fileName.textContent = files.length ? `${files.length} file(s) selected` : 'Choose log file(s)';
+    fileName.textContent = files.length ? `${files.length} file(s) chosen` : 'Choose a file';
   });
-
-  function setStatus(text, color) {
-    statusChip.textContent = text;
-    statusChip.style.color = color || '';
-    statusChip.style.borderColor = color || '';
-  }
 
   function severityCount(breakdown, key) {
     return breakdown && breakdown[key] !== undefined ? breakdown[key] : 0;
   }
+
+  // Plain-language labels for what were technical incident_type values
+  const FRIENDLY_NAMES = {
+    brute_force_login_attempt: 'Repeated login attempts',
+    port_scan: 'Unusual probing',
+    directory_enumeration: 'Searching for hidden pages',
+    statistical_behavioral_anomaly: 'Behavior that stands out',
+  };
+
+  const FRIENDLY_SEVERITY = {
+    critical: 'Needs attention now',
+    high: 'Worth a close look',
+    medium: 'Worth noting',
+    low: 'Minor',
+  };
 
   function renderReport(data) {
     const b = data.severity_breakdown || {};
@@ -71,43 +71,42 @@
 
     let html = `
       <div class="summary-bar">
-        <div class="summary-cell sev-critical"><div class="num">${severityCount(b,'critical')}</div><div class="label">Critical</div></div>
-        <div class="summary-cell sev-high"><div class="num">${severityCount(b,'high')}</div><div class="label">High</div></div>
-        <div class="summary-cell sev-medium"><div class="num">${severityCount(b,'medium')}</div><div class="label">Medium</div></div>
-        <div class="summary-cell sev-low"><div class="num">${severityCount(b,'low')}</div><div class="label">Low</div></div>
+        <div class="summary-cell sev-critical"><div class="num">${severityCount(b,'critical')}</div><div class="label">Urgent</div></div>
+        <div class="summary-cell sev-high"><div class="num">${severityCount(b,'high')}</div><div class="label">Worth a look</div></div>
+        <div class="summary-cell sev-medium"><div class="num">${severityCount(b,'medium')}</div><div class="label">Worth noting</div></div>
+        <div class="summary-cell sev-low"><div class="num">${severityCount(b,'low')}</div><div class="label">Minor</div></div>
       </div>
 
       <div class="exec-summary">
-        <span class="tag">Executive Summary</span>
+        <span class="tag">In short</span>
         ${data.executive_summary}
       </div>
 
       <div class="incidents-header">
-        <h3>Detected Incidents</h3>
-        <span>${incidents.length} total &middot; ${data.total_log_lines} log lines parsed &middot; ${(data.parsing_coverage*100).toFixed(1)}% coverage</span>
+        <h3>What stood out</h3>
+        <span>${incidents.length} thing${incidents.length === 1 ? '' : 's'} found &middot; ${data.total_log_lines} lines read</span>
       </div>
     `;
 
     if (incidents.length === 0) {
-      html += `<div class="empty-state">No anomalies detected in the submitted logs.</div>`;
+      html += `<div class="empty-state">Nothing unusual here. Everything looks calm.</div>`;
     } else {
       incidents.forEach((inc, idx) => {
         const sev = inc.severity || 'low';
+        const niceName = FRIENDLY_NAMES[inc.incident_type] || inc.incident_type.replace(/_/g, ' ');
+        const niceSev = FRIENDLY_SEVERITY[sev] || sev;
         html += `
           <div class="incident-card ${sev}">
             <div class="incident-top">
-              <div class="incident-type">${inc.incident_type.replace(/_/g, ' ')}</div>
-              <div class="sev-badge ${sev}">${sev}</div>
+              <div class="incident-type">${niceName}</div>
+              <div class="sev-badge ${sev}">${niceSev}</div>
             </div>
             <div class="incident-meta">
-              <span>SRC_IP: <b>${inc.src_ip}</b></span>
-              <span>TACTIC: <b>${inc.mitre_tactic}</b></span>
-              <span>DETECTOR: <b>${inc.detector}</b></span>
-              <span>CONFIDENCE: <b>${inc.detector_confidence}</b></span>
+              <span>From <b>${inc.src_ip}</b></span>
             </div>
             <div class="incident-summary">${inc.analyst_summary}</div>
-            <div class="incident-action"><b>RECOMMENDED ACTION →</b> ${inc.recommended_action}</div>
-            <span class="evidence-toggle" onclick="toggleEvidence(${idx})">▸ view raw evidence (${inc.evidence_count} events)</span>
+            <div class="incident-action"><b>What to do →</b> ${inc.recommended_action}</div>
+            <span class="evidence-toggle" onclick="toggleEvidence(${idx})">See the lines behind this (${inc.evidence_count})</span>
             <div class="evidence-block" id="evidence-${idx}">${inc.sample_evidence.join('\n')}</div>
           </div>
         `;
@@ -123,23 +122,20 @@
   };
 
   async function runAnalysis(endpoint, options) {
-    setStatus('ANALYZING…', '#C98A4B');
-    resultsEl.innerHTML = `<div class="loading-state">Parsing logs, running anomaly detection, triaging incidents…</div>`;
+    resultsEl.innerHTML = `<div class="loading-state">Reading through everything, one line at a time…</div>`;
     try {
       const res = await fetch(endpoint, options);
-      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      if (!res.ok) throw new Error(`Something went wrong (${res.status})`);
       const data = await res.json();
       renderReport(data);
-      setStatus('ANALYSIS COMPLETE', '#7E9468');
     } catch (err) {
-      resultsEl.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
-      setStatus('ERROR', '#B5482E');
+      resultsEl.innerHTML = `<div class="empty-state">Something went wrong: ${err.message}</div>`;
     }
   }
 
   analyzeBtn.addEventListener('click', () => {
     if (!fileInput.files.length) {
-      fileName.textContent = 'Select a file first';
+      fileName.textContent = 'Choose a file first';
       return;
     }
     const formData = new FormData();
