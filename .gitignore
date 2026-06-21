@@ -7,3 +7,5 @@ venv/
 .pytest_cache/
 data/reports/*.json
 !data/reports/.gitkeep
+1.txt
+.gitignore
